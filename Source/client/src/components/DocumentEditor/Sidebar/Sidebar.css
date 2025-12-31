@@ -1,0 +1,46 @@
+.sidebar {
+    width: 300px;
+    background: #ffffff;
+    border-right: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .tabs {
+    display: flex;
+    background: #2f2f2f;
+  }
+  
+  .tabs span {
+    flex: 1;
+    padding: 10px;
+    color: #aaa;
+    font-size: 11px;
+    text-align: center;
+    cursor: pointer;
+  }
+  
+  .tabs .active {
+    color: white;
+    background: #1f1f1f;
+  }
+  
+  .sidebar-content {
+    padding: 16px;
+  }
+  
+  .field {
+    margin-bottom: 12px;
+  }
+  
+  .field label {
+    font-size: 11px;
+    color: #666;
+  }
+  
+  .field span {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  
