@@ -1,0 +1,37 @@
+.editor-container {
+    flex: 1;
+    background: #f0f2f5;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .editor {
+    background: white;
+    margin: 20px auto;
+    padding: 40px;
+    width: 850px;
+    min-height: 100%;
+    box-shadow: 0 0 6px rgba(0,0,0,0.1);
+    outline: none;
+  }
+  
+  .editor h3 {
+    margin-top: 20px;
+    font-size: 16px;
+  }
+  
+  .editor p {
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+  
+  .editor-footer {
+    height: 30px;
+    background: #eaeaea;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 11px;
+    align-items: center;
+  }
+  
