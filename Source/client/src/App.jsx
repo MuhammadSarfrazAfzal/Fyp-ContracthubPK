@@ -8,7 +8,9 @@ import ContractsByStatus from './components/Reports/contract-report'
 function App() {
   return (
     <>
+        <WelcomeScreen></WelcomeScreen>
         <NavBar></NavBar> 
+      
         <MyContracts></MyContracts>
         <NewContract></NewContract>
         <ContractsByStatus></ContractsByStatus>
