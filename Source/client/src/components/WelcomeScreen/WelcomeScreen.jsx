@@ -1,6 +1,6 @@
 import React from 'react'
 import NavBar from '../NavBar/NavBar'
-import '../WelcomeScreen/WelcomeScreen.css'
+// import '../WelcomeScreen/WelcomeScreen.css'
 const WelcomeScreen = () => {
 
   return (
@@ -29,7 +29,7 @@ const WelcomeScreen = () => {
             </h1>
             <p>
               Draft, collaborate, approve, and sign contracts without switching
-              tools — reduce risk and close faster.
+              tools reduce risk and close faster.
             </p>
 
 
