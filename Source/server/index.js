@@ -2,9 +2,14 @@ const express = require("express");
 const dotenv = require("dotenv").config();
 const dbConnect = require("./src/config/dbConnect")
 const authRoutes = require("./src/routes/authRoutes")
+const cookieParser = require("cookie-parser")
+const cors = require("cors")
 
 dbConnect()
 const app = express()
+
+app.use(cors())
+app.use(cookieParser())
 
 // middleware
 app.use(express.json())

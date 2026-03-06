@@ -6,7 +6,7 @@ const register = async (req, res) => {
         const { username, useremail, password, role } = req.body;
         hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User(
-            { useremail, password: hashedPassword, role }
+            { username, useremail, password: hashedPassword, role }
         )
         await newUser.save()
         res.status(201)
@@ -20,7 +20,7 @@ const register = async (req, res) => {
 const login = async (req, res) => {
     try {
         const { useremail, password } = req.body;
-        const user = await User.find({ useremail });
+        const user = await User.findOne({ useremail });
         if (!user) {
             return res.status(404)
         }
