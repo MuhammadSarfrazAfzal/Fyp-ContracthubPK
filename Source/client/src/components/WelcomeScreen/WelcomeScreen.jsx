@@ -1,31 +1,18 @@
 import React from 'react'
 import NavBar from '../NavBar/NavBar'
-// import '../WelcomeScreen/WelcomeScreen.css'
+import '../WelcomeScreen/WelcomeScreen.css'
+import Navbar from './Navbar'
 const WelcomeScreen = () => {
 
   return (
     <>
+      <Navbar></Navbar>
       <div className="wrapper">
-        <header className="navbar">
-          <div className="nav-left">
-            <img
-              
-              alt="ContracthubPK"
-              className="logo"
-            />
-          </div>
-          <div className="nav-right">
-            <a href="#" className="nav-link">Start a trial</a>
-            <button className="nav-btn">Register</button>
-            <span className="hamburger">☰</span>
-          </div>
-        </header>
-
         <main className="hero">
           <div className="hero-text">
             <span className="tag">FREELANCE CONTRACT MANAGEMENT SOFTWARE</span>
-            <h1>
-              Streamline your entire contract lifecycle in one platform.
+            <h1 className='w-full text-2xl sm:text-4xl font-bold whitespace-normal wrap-break-word'>
+              Streamline your entire contract lifecycle in one platform...
             </h1>
             <p>
               Draft, collaborate, approve, and sign contracts without switching
@@ -51,7 +38,7 @@ const WelcomeScreen = () => {
           </div>
 
 
-          <div className="hero-visual">
+          <div className="hero-visual hidden sm:block">
             <div className="doc back"></div>
             <div className="doc front">
               <div className="doc-title">BUSINESS<br />CONTRACT</div>
