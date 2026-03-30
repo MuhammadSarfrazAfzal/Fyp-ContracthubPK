@@ -1,0 +1,17 @@
+*{
+    margin: 0px;
+    padding: 0px;
+}
+button{
+    background-color: lightseagreen;
+    padding: 5px,10px;
+}
+div{
+    background-color:skyblue;
+    display: flex;
+    height: 50px;
+    align-items: center;
+}
+h3{
+    padding-left: 10px;
+}
