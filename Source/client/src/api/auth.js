@@ -21,24 +21,6 @@ export const signup = async (email, password, role) => {
   return data;
 };
 
-/**
- * Log in an existing user
- * @param {string} email
- * @param {string} password
- * @returns {Promise<{token: string, user: object, message: string}>}
- */
-export const login = async (email, password) => {
-  const response = await fetch(`${API_BASE}/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || 'Login failed');
-  }
-  return data;
-};
 
 /**
  * Get the currently authenticated user
