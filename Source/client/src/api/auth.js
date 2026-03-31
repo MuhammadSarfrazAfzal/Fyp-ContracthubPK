@@ -21,7 +21,6 @@ export const signup = async (email, password, role) => {
   return data;
 };
 
-
 /**
  * Get the currently authenticated user
  * @param {string} token
