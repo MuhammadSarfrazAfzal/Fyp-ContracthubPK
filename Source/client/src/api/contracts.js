@@ -134,3 +134,14 @@ export const approveMilestone = async (token, id, milestoneId) => {
   return data;
 };
 
+// Request cancellation (Client or Freelancer)
+export const requestCancellation = async (token, id, reason) => {
+  const res = await fetch(`${API_URL}/${id}/request-cancellation`, {
+    method: 'POST',
+    headers: authHeader(token),
+    body: JSON.stringify({ reason }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to submit cancellation request');
+  return data;
+};

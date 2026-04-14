@@ -22,6 +22,25 @@ export const signup = async (email, password, role) => {
 };
 
 /**
+ * Log in an existing user
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{token: string, user: object, message: string}>}
+ */
+export const login = async (email, password) => {
+  const response = await fetch(`${API_BASE}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Login failed');
+  }
+  return data;
+};
+
+/**
  * Get the currently authenticated user
  * @param {string} token
  * @returns {Promise<{user: object}>}
@@ -37,6 +56,26 @@ export const getMe = async (token) => {
   const data = await response.json();
   if (!response.ok) {
     throw new Error(data.message || 'Failed to fetch user');
+  }
+  return data;
+};
+
+/**
+ * Get dashboard statistics
+ * @param {string} token
+ * @returns {Promise<{stats: object}>}
+ */
+export const getStats = async (token) => {
+  const response = await fetch(`${API_BASE}/stats`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to fetch stats');
   }
   return data;
 };
