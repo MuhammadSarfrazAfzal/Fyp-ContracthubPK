@@ -2,16 +2,17 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const dns = require('dns');
-
-
 const authRoutes = require('./routes/auth');
 const contractRoutes = require('./routes/contracts');
+const notificationRoutes = require('./routes/notifications');
+const paymentRoutes = require('./routes/payments');
+const adminRoutes = require('./routes/admin');
 const path = require('path');
-
-dns.setServers(['1.1.1.1', '0.0.0.0'])
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+const dns = require('dns');
+dns.setServers(['1.1.1.1', '0.0.0.0'])
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
@@ -25,6 +26,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/contracts', contractRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
