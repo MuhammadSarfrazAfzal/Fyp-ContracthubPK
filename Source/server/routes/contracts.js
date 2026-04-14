@@ -4,7 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const Contract = require('../models/Contract');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
+const Payment = require('../models/Payment');
 const { protect } = require('../middleware/auth');
+const sendEmail = require('../utils/sendEmail');
 
 const router = express.Router();
 
@@ -90,7 +93,7 @@ router.post('/', async (req, res) => {
       value: value || 0,
       currency: currency || 'USD',
       tags: tags || [],
-      status: status || 'draft',
+      status: 'draft', // Force new contracts to draft so clients cannot bypass approval
       freelancerEmail: freelancerEmail ? freelancerEmail.toLowerCase().trim() : '',
       freelancer: freelancerId,
       milestones: milestones || [],
@@ -131,13 +134,20 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ message: 'Submitted contracts cannot be edited.' });
     }
 
+    // Removed 'status' to prevent manual workflow bypass
     const allowedFields = [
       'title', 'content', 'partyA', 'partyB',
-      'startDate', 'endDate', 'value', 'currency', 'tags', 'status', 'milestones',
+      'startDate', 'endDate', 'value', 'currency', 'tags', 'milestones',
     ];
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) contract[field] = req.body[field];
     });
+
+    // Automatically revert rejected contracts back to draft on edit
+    // so they can be re-sent for approval.
+    if (contract.status === 'rejected') {
+      contract.status = 'draft';
+    }
 
     if (req.body.freelancerEmail !== undefined) {
       contract.freelancerEmail = req.body.freelancerEmail;
@@ -149,11 +159,6 @@ router.put('/:id', async (req, res) => {
       } else {
         contract.freelancer = null;
       }
-    }
-
-    // Prevent re-reverting a submitted contract
-    if (req.body.status === 'submitted') {
-      return res.status(400).json({ message: 'Use the submit endpoint to submit a contract.' });
     }
 
     await contract.save();
@@ -179,6 +184,20 @@ router.post('/:id/request-approval', async (req, res) => {
     contract.status = 'pending_approval';
     await contract.save();
     
+    await sendEmail({
+      email: contract.freelancerEmail,
+      subject: 'Contract Approval Request',
+      message: `You have received a new contract approval request for "${contract.title}". Please log in to review and respond.`
+    });
+    
+    await Notification.create({
+      recipient: contract.freelancer,
+      sender: req.user._id,
+      contract: contract._id,
+      type: 'contract_request',
+      message: `You have received a new contract approval request for "${contract.title}".`
+    });
+    
     res.json({ message: 'Approval request sent!', contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -190,7 +209,7 @@ router.post('/:id/request-approval', async (req, res) => {
 router.post('/:id/respond', async (req, res) => {
   try {
     const { action } = req.body; // 'approve' or 'reject'
-    const contract = await Contract.findOne({ _id: req.params.id, freelancer: req.user._id });
+    const contract = await Contract.findOne({ _id: req.params.id, freelancer: req.user._id }).populate('user', 'email name');
     if (!contract) return res.status(404).json({ message: 'Contract not found.' });
     if (contract.status !== 'pending_approval') {
       return res.status(400).json({ message: 'Contract is not pending approval.' });
@@ -205,6 +224,25 @@ router.post('/:id/respond', async (req, res) => {
     }
 
     await contract.save();
+
+    if (contract.user && contract.user.email) {
+      await sendEmail({
+        email: contract.user.email,
+        subject: `Contract ${action === 'approve' ? 'Approved' : 'Rejected'}`,
+        message: `Your contract "${contract.title}" has been ${action}d by the freelancer.`
+      });
+
+      await Notification.create({
+        recipient: contract.user._id,
+        sender: req.user._id,
+        contract: contract._id,
+        type: action === 'approve' ? 'contract_approved' : 'contract_rejected',
+        message: action === 'approve' 
+          ? `Your contract "${contract.title}" has been approved! You can now deposit funds into escrow via EasyPaisa or JazzCash.`
+          : `Your contract "${contract.title}" has been rejected by the freelancer.`
+      });
+    }
+
     res.json({ message: `Contract ${action}d successfully.`, contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -218,7 +256,7 @@ router.post('/:id/submit', upload.single('workFile'), async (req, res) => {
     const contract = await Contract.findOne({
       _id: req.params.id,
       $or: [{ user: req.user._id }, { freelancer: req.user._id }],
-    });
+    }).populate('user', 'email name');
     if (!contract) return res.status(404).json({ message: 'Contract not found.' });
     if (contract.status === 'submitted') {
       return res.status(400).json({ message: 'Contract already submitted.' });
@@ -241,6 +279,23 @@ router.post('/:id/submit', upload.single('workFile'), async (req, res) => {
     }
 
     await contract.save();
+
+    if (contract.user && contract.user.email) {
+      await sendEmail({
+        email: contract.user.email,
+        subject: 'Contract Work Submitted',
+        message: `The work for contract "${contract.title}" has been submitted by the freelancer. Please review it.`
+      });
+
+      await Notification.create({
+        recipient: contract.user._id,
+        sender: req.user._id,
+        contract: contract._id,
+        type: 'work_submitted',
+        message: `The work for contract "${contract.title}" has been submitted by the freelancer.`
+      });
+    }
+
     res.json({ message: 'Contract submitted successfully!', contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -258,7 +313,44 @@ router.post('/:id/approve-work', async (req, res) => {
     }
     
     contract.status = 'completed';
+    
+    // Release payment from escrow
+    if (contract.paymentStatus === 'escrowed') {
+      contract.paymentStatus = 'released';
+      // Create release payment record
+      await Payment.create({
+        contract: contract._id,
+        payer: contract.user,
+        payee: contract.freelancer,
+        amount: contract.value,
+        method: 'easypaisa', // Default for mock release
+        senderPhone: 'SYSTEM',
+        transactionId: `RELEASE-${Date.now()}`,
+        status: 'success',
+        type: 'release',
+      });
+    }
+
     await contract.save();
+
+    if (contract.freelancerEmail) {
+      await sendEmail({
+        email: contract.freelancerEmail,
+        subject: 'Contract Work Approved',
+        message: `Your submitted work for "${contract.title}" has been approved. The contract is now completed.`
+      });
+    }
+
+    if (contract.freelancer) {
+      await Notification.create({
+        recipient: contract.freelancer,
+        sender: req.user._id,
+        contract: contract._id,
+        type: 'work_approved',
+        message: `Your submitted work for "${contract.title}" has been approved. The contract is now completed.`
+      });
+    }
+
     res.json({ message: 'Contract work approved and completed successfully!', contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -269,7 +361,7 @@ router.post('/:id/approve-work', async (req, res) => {
 // @desc    Freelancer submits work file for a milestone
 router.post('/:id/milestones/:milestoneId/submit', upload.single('workFile'), async (req, res) => {
   try {
-    const contract = await Contract.findOne({ _id: req.params.id, freelancer: req.user._id });
+    const contract = await Contract.findOne({ _id: req.params.id, freelancer: req.user._id }).populate('user', 'email name');
     if (!contract) return res.status(404).json({ message: 'Contract not found or not authorized.' });
     if (contract.status !== 'active') return res.status(400).json({ message: 'Contract is not active.' });
     
@@ -293,6 +385,23 @@ router.post('/:id/milestones/:milestoneId/submit', upload.single('workFile'), as
     }
     
     await contract.save();
+
+    if (contract.user && contract.user.email) {
+      await sendEmail({
+        email: contract.user.email,
+        subject: 'Milestone Work Submitted',
+        message: `Work has been submitted for a milestone ("${milestone.description}") on contract "${contract.title}". Please review it.`
+      });
+
+      await Notification.create({
+        recipient: contract.user._id,
+        sender: req.user._id,
+        contract: contract._id,
+        type: 'milestone_submitted',
+        message: `Work has been submitted for milestone "${milestone.description}" on contract "${contract.title}".`
+      });
+    }
+
     res.json({ message: 'Milestone work submitted!', contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -313,7 +422,49 @@ router.post('/:id/milestones/:milestoneId/approve', async (req, res) => {
     }
     
     milestone.status = 'approved';
+
+    // Release milestone payment from escrow
+    if (milestone.paymentStatus === 'escrowed') {
+      milestone.paymentStatus = 'released';
+      contract.escrowedAmount -= milestone.amount;
+      if (contract.escrowedAmount <= 0) contract.paymentStatus = 'released';
+      else contract.paymentStatus = 'partially_released';
+      
+      // Create release payment record
+      await Payment.create({
+        contract: contract._id,
+        milestone: milestone._id,
+        payer: contract.user,
+        payee: contract.freelancer,
+        amount: milestone.amount,
+        method: 'easypaisa', // Default mock
+        senderPhone: 'SYSTEM',
+        transactionId: `RELEASE-M-${Date.now()}`,
+        status: 'success',
+        type: 'release',
+      });
+    }
+
     await contract.save();
+
+    if (contract.freelancerEmail) {
+      await sendEmail({
+        email: contract.freelancerEmail,
+        subject: 'Milestone Work Approved',
+        message: `Your submitted work for the milestone "${milestone.description}" on contract "${contract.title}" has been approved.`
+      });
+    }
+
+    if (contract.freelancer) {
+      await Notification.create({
+        recipient: contract.freelancer,
+        sender: req.user._id,
+        contract: contract._id,
+        type: 'milestone_approved',
+        message: `Your submitted work for milestone "${milestone.description}" on contract "${contract.title}" has been approved.`
+      });
+    }
+
     res.json({ message: 'Milestone approved!', contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -327,6 +478,53 @@ router.delete('/:id', async (req, res) => {
     const contract = await Contract.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!contract) return res.status(404).json({ message: 'Contract not found.' });
     res.json({ message: 'Contract deleted.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error.', error: err.message });
+  }
+});
+
+// @route   POST /api/contracts/:id/request-cancellation
+// @desc    Client or Freelancer requests to cancel the contract with a reason
+router.post('/:id/request-cancellation', async (req, res) => {
+  try {
+    const { reason } = req.body;
+    if (!reason) return res.status(400).json({ message: 'Reason for cancellation is required.' });
+
+    const contract = await Contract.findOne({
+      _id: req.params.id,
+      $or: [{ user: req.user._id }, { freelancer: req.user._id }],
+    });
+
+    if (!contract) return res.status(404).json({ message: 'Contract not found.' });
+    if (contract.status === 'cancelled' || contract.status === 'cancellation_pending') {
+      return res.status(400).json({ message: 'Contract is already cancelled or pending cancellation.' });
+    }
+
+    contract.status = 'cancellation_pending';
+    contract.cancellationRequest = {
+      requestedBy: req.user._id,
+      reason,
+      requestedAt: new Date(),
+      status: 'pending'
+    };
+
+    await contract.save();
+
+    // Notify Admin (we fetch any admin user, or just rely on the dashboard polling if simple)
+    // For now, let's create a notification for any admin found
+    const admins = await User.find({ role: 'admin' });
+    const notificationPromises = admins.map(adminUser => 
+      Notification.create({
+        recipient: adminUser._id,
+        sender: req.user._id,
+        contract: contract._id,
+        type: 'cancellation_request',
+        message: `Cancellation requested for "${contract.title}" by ${req.user.email}.`
+      })
+    );
+    await Promise.all(notificationPromises);
+
+    res.json({ message: 'Cancellation request submitted to admin for review.', contract });
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
   }

@@ -1,6 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Contract = require('../models/Contract');
+const Payment = require('../models/Payment');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -123,6 +125,64 @@ router.get('/me', protect, async (req, res) => {
   } catch (error) {
     console.error('Get me error:', error);
     res.status(500).json({ message: 'Server error. Please try again.' });
+  }
+});
+
+// @route   GET /api/auth/stats
+// @desc    Get real-time stats for the dashboard
+// @access  Protected
+router.get('/stats', protect, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    let stats = {};
+
+    if (req.user.role === 'freelancer') {
+      const activeGigs = await Contract.countDocuments({ 
+        freelancer: userId, 
+        status: { $in: ['active', 'submitted'] } 
+      });
+
+      const pendingOffers = await Contract.countDocuments({ 
+        freelancer: userId, 
+        status: 'pending_approval' 
+      });
+
+      const completedContracts = await Contract.countDocuments({ 
+        freelancer: userId, 
+        status: 'completed' 
+      });
+
+      const earningsData = await Payment.aggregate([
+        { $match: { payee: userId, type: 'release', status: 'success' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      const totalEarned = earningsData.length > 0 ? earningsData[0].total : 0;
+
+      stats = { activeGigs, pendingOffers, completedContracts, totalEarned };
+    } else if (req.user.role === 'client') {
+      const activeProjects = await Contract.countDocuments({ 
+        user: userId, 
+        status: { $in: ['active', 'submitted'] } 
+      });
+
+      const totalSpentData = await Payment.aggregate([
+        { $match: { payer: userId, type: 'escrow', status: 'success' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      const totalSpent = totalSpentData.length > 0 ? totalSpentData[0].total : 0;
+
+      const milestonesAwaiting = await Contract.countDocuments({
+        user: userId,
+        'milestones.status': 'submitted',
+      });
+
+      stats = { activeProjects, totalSpent, milestonesAwaiting };
+    }
+
+    res.status(200).json({ stats });
+  } catch (error) {
+    console.error('Stats error:', error);
+    res.status(500).json({ message: 'Server error fetching stats.' });
   }
 });
 
