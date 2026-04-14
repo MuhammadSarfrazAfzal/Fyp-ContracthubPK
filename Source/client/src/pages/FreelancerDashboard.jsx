@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from '../components/NotificationBell';
+import { getStats } from '../api/auth';
 import './Dashboard.css';
 
 const FreelancerDashboard = () => {
-  const { user, logoutUser } = useAuth();
+  const { user, logoutUser, token } = useAuth();
   const navigate = useNavigate();
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   const handleLogout = () => {
     logoutUser();
@@ -26,6 +30,29 @@ const FreelancerDashboard = () => {
     });
   };
 
+  useEffect(() => {
+    if (token) {
+      (async () => {
+        try {
+          const data = await getStats(token);
+          setStats(data.stats);
+        } catch (err) {
+          console.error('Failed to fetch stats:', err);
+        } finally {
+          setLoadingStats(false);
+        }
+      })();
+    }
+  }, [token]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'PKR',
+      maximumFractionDigits: 0
+    }).format(amount || 0);
+  };
+
   return (
     <div className="dashboard-wrapper">
       {/* Background orbs */}
@@ -36,10 +63,11 @@ const FreelancerDashboard = () => {
       {/* Navbar */}
       <nav className="dash-nav">
         <div className="dash-nav-brand">
-          <span className="brand-icon">💻</span>
-          <span className="brand-name">Freelancer Space</span>
+          <span className="brand-icon">💼</span>
+          <span className="brand-name">ContracthubPK</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <NotificationBell />
           <button
             id="nav-contracts-btn"
             onClick={() => navigate('/contracts')}
@@ -101,15 +129,37 @@ const FreelancerDashboard = () => {
             <div className="stat-icon">🎯</div>
             <div className="stat-info">
               <p className="stat-label">Active Gigs</p>
-              <p className="stat-value">3</p>
+              <p className="stat-value">{loadingStats ? '...' : stats?.activeGigs || 0}</p>
             </div>
           </div>
 
           <div className="stat-card">
             <div className="stat-icon">💰</div>
             <div className="stat-info">
-              <p className="stat-label">Earned</p>
-              <p className="stat-value" style={{ color: '#22c55e' }}>$1,250.00</p>
+              <p className="stat-label">Total Earned</p>
+              <p className="stat-value" style={{ color: '#22c55e' }}>
+                {loadingStats ? '...' : formatCurrency(stats?.totalEarned)}
+              </p>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">📩</div>
+            <div className="stat-info">
+              <p className="stat-label">Pending Offers</p>
+              <p className="stat-value" style={{ color: '#6366f1' }}>
+                {loadingStats ? '...' : stats?.pendingOffers || 0}
+              </p>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">✅</div>
+            <div className="stat-info">
+              <p className="stat-label">Completed</p>
+              <p className="stat-value">
+                {loadingStats ? '...' : stats?.completedContracts || 0}
+              </p>
             </div>
           </div>
         </div>

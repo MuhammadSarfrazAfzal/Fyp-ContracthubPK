@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from '../components/NotificationBell';
+import { getStats } from '../api/auth';
 import './Dashboard.css';
 
 const ClientDashboard = () => {
-  const { user, logoutUser } = useAuth();
+  const { user, logoutUser, token } = useAuth();
   const navigate = useNavigate();
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   const handleLogout = () => {
     logoutUser();
@@ -26,6 +30,29 @@ const ClientDashboard = () => {
     });
   };
 
+  useEffect(() => {
+    if (token) {
+      (async () => {
+        try {
+          const data = await getStats(token);
+          setStats(data.stats);
+        } catch (err) {
+          console.error('Failed to fetch stats:', err);
+        } finally {
+          setLoadingStats(false);
+        }
+      })();
+    }
+  }, [token]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'PKR',
+      maximumFractionDigits: 0
+    }).format(amount || 0);
+  };
+
   return (
     <div className="dashboard-wrapper">
       {/* Background orbs */}
@@ -36,10 +63,11 @@ const ClientDashboard = () => {
       {/* Navbar */}
       <nav className="dash-nav">
         <div className="dash-nav-brand">
-          <span className="brand-icon">🤝</span>
-          <span className="brand-name">Client Portal</span>
+          <span className="brand-icon">💼</span>
+          <span className="brand-name">ContracthubPK</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <NotificationBell />
           <button
             id="nav-contracts-btn"
             onClick={() => navigate('/contracts')}
@@ -101,15 +129,27 @@ const ClientDashboard = () => {
             <div className="stat-icon">📈</div>
             <div className="stat-info">
               <p className="stat-label">Active Projects</p>
-              <p className="stat-value">5</p>
+              <p className="stat-value">{loadingStats ? '...' : stats?.activeProjects || 0}</p>
             </div>
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon">💡</div>
+            <div className="stat-icon">💳</div>
             <div className="stat-info">
-              <p className="stat-label">Invoices Due</p>
-              <p className="stat-value" style={{ color: '#ef4444' }}>$0.00</p>
+              <p className="stat-label">Total Spent</p>
+              <p className="stat-value" style={{ color: '#22c55e' }}>
+                {loadingStats ? '...' : formatCurrency(stats?.totalSpent)}
+              </p>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">⏳</div>
+            <div className="stat-info">
+              <p className="stat-label">Pending Reviews</p>
+              <p className="stat-value" style={{ color: '#ef4444' }}>
+                {loadingStats ? '...' : stats?.milestonesAwaiting || 0}
+              </p>
             </div>
           </div>
         </div>
